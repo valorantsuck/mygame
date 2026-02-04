@@ -1,46 +1,65 @@
-\<!DOCTYPE html>
-<html>
+<!DOCTYPE html>
+<html lang="zh-TW">
 <head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>火柴人：行動對決</title>
+    <title>火柴人：英雄遠征 (Stickman Saga)</title>
     <style>
-        body { text-align: center; font-family: sans-serif; background: #1a1a1a; color: white; margin: 0; overflow: hidden; touch-action: none; }
-        #game-container { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        canvas { background: #fff; max-width: 100%; max-height: 70vh; border-bottom: 5px solid #444; }
+        * { user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { text-align: center; font-family: 'Arial Black', sans-serif; background: #1a1a1a; color: white; margin: 0; overflow: hidden; touch-action: none; }
         
-        /* UI 能量條 */
-        .ui-bars { width: 90%; display: flex; justify-content: space-between; padding: 10px; }
-        .bar-wrap { width: 45%; }
-        .bar-bg { background: #444; height: 10px; border: 1px solid #000; margin: 2px 0; }
-        .hp-bar { height: 100%; background: #ff4757; width: 100%; transition: 0.2s; }
-        .en-bar { height: 100%; background: #1e90ff; width: 0%; transition: 0.1s; }
+        /* UI 頂部資訊 */
+        .header { background: #222; padding: 10px; border-bottom: 3px solid #444; height: 50px; }
+        .stage-info { font-size: 1.5rem; color: #0f0; }
 
-        /* 手機控制按鈕 */
-        .controls { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; box-sizing: border-box; pointer-events: none; }
-        .btn { width: 70px; height: 70px; background: rgba(255, 255, 255, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; pointer-events: auto; user-select: none; -webkit-tap-highlight-color: transparent; }
-        .btn:active { background: rgba(255, 255, 255, 0.5); }
-        .left-controls { display: flex; gap: 10px; }
-        .right-controls { display: flex; gap: 10px; }
-        .btn-k { background: rgba(255, 215, 0, 0.3); color: gold; border: 2px solid gold; }
+        /* 遊戲主體 */
+        #game-container { position: relative; width: 100vw; height: calc(100vh - 70px); display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
+        
+        .ui-bars { display: flex; width: 95%; max-width: 800px; justify-content: space-between; padding: 10px 0; }
+        .bar-wrap { width: 45%; }
+        .bar-label { font-size: 12px; display: block; margin-bottom: 2px; text-align: left; }
+        .bar-bg { background: #444; height: 12px; border: 1px solid #000; border-radius: 6px; overflow: hidden; }
+        .hp-fill { height: 100%; background: #ff4757; width: 100%; transition: width 0.2s; }
+        .en-fill { height: 100%; background: #1e90ff; width: 0%; transition: 0.1s; }
+
+        canvas { background: #fff; width: 95%; max-width: 800px; height: auto; border: 4px solid #333; border-radius: 4px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+
+        /* 虛擬控制鈕 */
+        .controls { position: absolute; bottom: 40px; width: 100%; display: flex; justify-content: space-between; padding: 0 30px; box-sizing: border-box; pointer-events: none; }
+        .ctrl-group { display: flex; gap: 15px; pointer-events: none; }
+        .btn { width: 70px; height: 70px; background: rgba(255, 255, 255, 0.15); border: 2px solid rgba(255, 255, 255, 0.4); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; pointer-events: auto; color: white; }
+        .btn:active { background: rgba(255, 255, 255, 0.4); transform: scale(0.9); }
+        .btn-k { border-color: gold; color: gold; background: rgba(255, 215, 0, 0.1); }
     </style>
 </head>
 <body>
 
+<div class="header">
+    <div id="stage-display" class="stage-info">STAGE 1</div>
+</div>
+
 <div id="game-container">
     <div class="ui-bars">
-        <div class="bar-wrap">P1 HP<div class="bar-bg"><div id="p1-hp" class="hp-bar"></div></div>EN<div class="bar-bg"><div id="p1-en" class="en-bar"></div></div></div>
-        <div class="bar-wrap">AI HP<div class="bar-bg"><div id="p2-hp" class="hp-bar"></div></div>EN<div class="bar-bg"><div id="p2-en" class="en-bar" style="background:orange;"></div></div></div>
+        <div class="bar-wrap">
+            <span class="bar-label">PLAYER</span>
+            <div class="bar-bg"><div id="p1-hp" class="hp-fill"></div></div>
+            <div class="bar-bg" style="height: 6px; margin-top: 4px;"><div id="p1-en" class="en-fill"></div></div>
+        </div>
+        <div class="bar-wrap">
+            <span class="bar-label">ENEMY</span>
+            <div class="bar-bg"><div id="p2-hp" class="hp-fill"></div></div>
+        </div>
     </div>
 
     <canvas id="gameCanvas" width="800" height="400"></canvas>
 
     <div class="controls">
-        <div class="left-controls">
+        <div class="ctrl-group">
             <div class="btn" id="btn-left">←</div>
             <div class="btn" id="btn-up">↑</div>
             <div class="btn" id="btn-right">→</div>
         </div>
-        <div class="right-controls">
+        <div class="ctrl-group">
             <div class="btn" id="btn-j">J</div>
             <div class="btn btn-k" id="btn-k">K</div>
         </div>
@@ -48,107 +67,208 @@
 </div>
 
 <script>
-// --- 此處省略部分重複的 Stickman 類別與渲染邏輯，直接整合觸控 ---
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-function playSound(freq, type, duration, vol = 0.05) {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-    osc.start(); osc.stop(audioCtx.currentTime + duration);
-}
+// 遊戲狀態
+let currentStage = 1;
+let gameState = 'PLAYING';
+let hitFlash = 0;
+
+// 輸入狀態
+const keys = { left: false, right: false };
 
 class Stickman {
     constructor(x, color, isPlayer) {
         this.x = x; this.y = 300; this.color = color;
-        this.hp = 100; this.energy = 0;
+        this.hp = 100; this.maxHp = 100; this.energy = 0;
         this.dx = 0; this.dy = 0;
         this.isJumping = false; this.isUltra = false;
-        this.comboStep = 0; this.direction = isPlayer ? 1 : -1;
+        this.direction = isPlayer ? 1 : -1;
+        this.size = 1;
     }
-    update() {
-        this.dy += 0.8; this.x += this.dx; this.y += this.dy;
-        if (this.y > 300) { this.y = 300; this.dy = 0; this.isJumping = false; }
-        this.x = Math.max(20, Math.min(780, this.x));
-    }
+
     draw() {
-        ctx.save(); ctx.translate(this.x, this.y);
-        ctx.strokeStyle = this.isUltra ? 'gold' : (this.hp > 0 ? this.color : '#ccc');
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(this.size, this.size);
+        ctx.strokeStyle = this.isUltra ? (Date.now()%100<50?'gold':'white') : (this.hp > 0 ? this.color : '#ccc');
         ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(0, -40, 10, 0, Math.PI*2); ctx.stroke(); //頭
-        ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(0, 0); ctx.stroke(); //身
+        ctx.lineCap = 'round';
+
+        // 頭
+        ctx.beginPath(); ctx.arc(0, -40, 10, 0, Math.PI*2); ctx.stroke();
+        // 身
+        ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(0, 0); ctx.stroke();
+        // 腳
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-15, 20); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(15, 20); ctx.stroke();
+        
+        // 手部動作 (簡單模擬)
+        ctx.beginPath();
         if (this.isUltra) {
+            ctx.moveTo(0, -20); ctx.lineTo(40 * this.direction, -20);
             ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
-            ctx.fillRect(10*this.direction, -70, 400*this.direction, 100);
+            ctx.fillRect(10 * this.direction, -70, 450 * this.direction, 100);
+        } else {
+            ctx.moveTo(0, -20); ctx.lineTo(15 * this.direction, -10);
         }
+        ctx.stroke();
         ctx.restore();
+    }
+
+    update() {
+        // 玩家重力與位移
+        this.dy += 0.8;
+        this.y += this.dy;
+        this.x += this.dx;
+
+        // 地板碰撞
+        if (this.y > 300) {
+            this.y = 300;
+            this.dy = 0;
+            this.isJumping = false;
+        }
+        // 邊界限制
+        this.x = Math.max(30, Math.min(770, this.x));
     }
 }
 
 const p1 = new Stickman(150, 'black', true);
 const ai = new Stickman(650, 'red', false);
 
-function attack(attacker, target, type) {
-    if (attacker.hp <= 0) return;
-    let damage = (type === 'ultra') ? 30 : 7;
-    let range = (type === 'ultra') ? 400 : 60;
-    if (type === 'ultra') { attacker.isUltra = true; setTimeout(() => attacker.isUltra = false, 500); playSound(100, 'sawtooth', 0.5); }
-    else { playSound(200, 'square', 0.1); }
-
-    const dist = Math.abs(attacker.x - target.x);
-    if (dist < range && ((attacker.direction === 1 && target.x > attacker.x) || (attacker.direction === -1 && target.x < attacker.x))) {
-        target.hp -= damage;
-        attacker.energy = Math.min(100, attacker.energy + 10);
-        playSound(150, 'sine', 0.05);
+function initStage(stage) {
+    p1.hp = 100; p1.x = 150; p1.energy = 0;
+    ai.x = 650; ai.energy = 0;
+    gameState = 'PLAYING';
+    
+    if (stage <= 4) {
+        document.getElementById('stage-display').innerText = `STAGE ${stage}`;
+        document.getElementById('stage-display').style.color = "#0f0";
+        ai.maxHp = 80 + (stage * 30);
+        ai.hp = ai.maxHp; ai.color = 'red'; ai.size = 1;
+    } else {
+        document.getElementById('stage-display').innerText = `FINAL BOSS`;
+        document.getElementById('stage-display').style.color = "#f0f";
+        ai.maxHp = 450; ai.hp = ai.maxHp; ai.color = 'purple'; ai.size = 1.8;
     }
 }
 
-// 觸控按鈕事件
-const handleBtn = (id, start) => {
-    const btn = document.getElementById(id);
-    const trigger = (e) => {
-        e.preventDefault();
-        if (id === 'btn-left') p1.dx = start ? -5 : 0;
-        if (id === 'btn-right') p1.dx = start ? 5 : 0;
-        if (id === 'btn-up' && start && !p1.isJumping) { p1.dy = -15; p1.isJumping = true; }
-        if (id === 'btn-j' && start) attack(p1, ai, 'combo');
-        if (id === 'btn-k' && start && p1.energy >= 100) { p1.energy = 0; attack(p1, ai, 'ultra'); }
-        if (start && (id === 'btn-left')) p1.direction = -1;
-        if (start && (id === 'btn-right')) p1.direction = 1;
-    };
-    btn.addEventListener('touchstart', trigger);
-    btn.addEventListener('touchend', (e) => { e.preventDefault(); if(id==='btn-left' || id==='btn-right') p1.dx = 0; });
-    // 相容滑鼠測試
-    btn.addEventListener('mousedown', trigger);
-    btn.addEventListener('mouseup', () => { if(id==='btn-left' || id==='btn-right') p1.dx = 0; });
-};
+function attack(attacker, target, isUltra) {
+    if (gameState !== 'PLAYING') return;
+    let range = isUltra ? 450 : 75;
+    let dmg = isUltra ? 40 : 12;
 
-['btn-left', 'btn-right', 'btn-up', 'btn-j', 'btn-k'].forEach(id => handleBtn(id, true));
+    if (isUltra) {
+        attacker.isUltra = true;
+        setTimeout(() => attacker.isUltra = false, 500);
+    }
+
+    const dist = Math.abs(attacker.x - target.x);
+    const correctDir = (attacker.direction === 1 && target.x > attacker.x) || (attacker.direction === -1 && target.x < attacker.x);
+
+    if (dist < range * attacker.size && correctDir) {
+        target.hp -= dmg;
+        attacker.energy = Math.min(100, attacker.energy + 10);
+        hitFlash = 5;
+    }
+}
+
+// 控制設定
+function setupControls() {
+    const bind = (id, startFn, endFn) => {
+        const el = document.getElementById(id);
+        el.addEventListener('touchstart', (e) => { e.preventDefault(); startFn(); }, {passive: false});
+        el.addEventListener('touchend', (e) => { e.preventDefault(); endFn(); }, {passive: false});
+        el.addEventListener('mousedown', (e) => { e.preventDefault(); startFn(); });
+        el.addEventListener('mouseup', (e) => { e.preventDefault(); endFn(); });
+    };
+
+    bind('btn-left', () => { keys.left = true; p1.direction = -1; }, () => keys.left = false);
+    bind('btn-right', () => { keys.right = true; p1.direction = 1; }, () => keys.right = false);
+    bind('btn-up', () => { if(!p1.isJumping){ p1.dy = -16; p1.isJumping = true; } }, () => {});
+    bind('btn-j', () => attack(p1, ai, false), () => {});
+    bind('btn-k', () => { if(p1.energy >= 100){ p1.energy = 0; attack(p1, ai, true); } }, () => {});
+
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft') { keys.left = true; p1.direction = -1; }
+        if (e.key === 'ArrowRight') { keys.right = true; p1.direction = 1; }
+        if (e.key === 'ArrowUp' && !p1.isJumping) { p1.dy = -16; p1.isJumping = true; }
+        if (e.key === 'j' || e.key === 'J') attack(p1, ai, false);
+        if (e.key === 'k' || e.key === 'K') { if(p1.energy >= 100){ p1.energy = 0; attack(p1, ai, true); } }
+        if (gameState !== 'PLAYING' && e.key === ' ') { currentStage = 1; initStage(1); }
+    });
+    window.addEventListener('keyup', (e) => {
+        if (e.key === 'ArrowLeft') keys.left = false;
+        if (e.key === 'ArrowRight') keys.right = false;
+    });
+}
 
 function loop() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // AI 簡單邏輯
-    const dist = p1.x - ai.x;
-    ai.direction = dist > 0 ? 1 : -1;
-    if (Math.abs(dist) > 60) ai.dx = dist > 0 ? 2 : -2; else ai.dx = 0;
-    if (Math.abs(dist) < 60 && Math.random() < 0.02) attack(ai, p1, 'combo');
-    if (ai.energy >= 100 && Math.abs(dist) < 300) { ai.energy = 0; attack(ai, p1, 'ultra'); }
+    // 背景與閃光
+    ctx.fillStyle = hitFlash > 0 ? '#ddd' : '#fff';
+    if (hitFlash > 0) hitFlash--;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // 地板線
+    ctx.strokeStyle = '#eee'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, 320); ctx.lineTo(800, 320); ctx.stroke();
 
-    p1.update(); ai.update();
-    p1.draw(); ai.draw();
-    
-    document.getElementById('p1-hp').style.width = p1.hp + '%';
-    document.getElementById('p2-hp').style.width = ai.hp + '%';
+    if (gameState === 'PLAYING') {
+        // 玩家移動邏輯
+        p1.dx = 0;
+        if (keys.left) p1.dx = -5;
+        if (keys.right) p1.dx = 5;
+
+        // AI 邏輯
+        let dist = p1.x - ai.x;
+        ai.direction = dist > 0 ? 1 : -1;
+        let aiSpeed = 1.8 + (currentStage * 0.4);
+        if (Math.abs(dist) > 60 * ai.size) ai.dx = dist > 0 ? aiSpeed : -aiSpeed; else ai.dx = 0;
+        
+        if (Math.abs(dist) < 85 * ai.size && Math.random() < (0.02 + currentStage * 0.005)) attack(ai, p1, false);
+        if (ai.energy >= 100) { ai.energy = 0; attack(ai, p1, true); }
+
+        p1.update();
+        ai.update();
+
+        // 判定勝負
+        if (p1.hp <= 0) gameState = 'GAMEOVER';
+        if (ai.hp <= 0) {
+            if (currentStage < 5) { currentStage++; initStage(currentStage); }
+            else { gameState = 'WIN'; }
+        }
+    }
+
+    p1.draw();
+    ai.draw();
+
+    // 更新 UI 血條
+    document.getElementById('p1-hp').style.width = Math.max(0, p1.hp) + '%';
+    document.getElementById('p2-hp').style.width = (Math.max(0, ai.hp) / ai.maxHp * 100) + '%';
     document.getElementById('p1-en').style.width = p1.energy + '%';
-    document.getElementById('p2-en').style.width = ai.energy + '%';
-    
+
+    if (gameState !== 'PLAYING') {
+        ctx.fillStyle = "rgba(0,0,0,0.8)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "white";
+        ctx.font = "40px Arial Black";
+        ctx.textAlign = "center";
+        ctx.fillText(gameState === 'WIN' ? "YOU BEAT THE GAME!" : "GAME OVER", 400, 200);
+        ctx.font = "20px Arial";
+        ctx.fillText("Tap screen to Restart", 400, 260);
+    }
+
     requestAnimationFrame(loop);
 }
+
+canvas.addEventListener('click', () => {
+    if (gameState !== 'PLAYING') { currentStage = 1; initStage(1); }
+});
+
+// 啟動
+setupControls();
+initStage(1);
 loop();
 </script>
 </body>
