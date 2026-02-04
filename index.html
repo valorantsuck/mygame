@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>火柴人：格鬥之魂 - 硬直平衡版</title>
+    <title>火柴人：格鬥之魂 - 無限連擊版</title>
     <style>
         * { user-select: none; -webkit-tap-highlight-color: transparent; }
         body { text-align: center; font-family: 'Arial Black', sans-serif; background: #1a1a1a; color: white; margin: 0; overflow: hidden; touch-action: none; }
@@ -15,20 +15,29 @@
         .bar-label { font-size: 12px; display: block; margin-bottom: 2px; text-align: left; color: #aaa; }
         .bar-bg { background: #444; height: 14px; border: 2px solid #000; border-radius: 7px; overflow: hidden; }
         .hp-fill { height: 100%; background: linear-gradient(to bottom, #ff4757, #ff6b81); width: 100%; transition: width 0.1s ease-out; }
-        .en-fill { height: 100%; background: linear-gradient(to bottom, #1e90ff, #70a1ff); width: 0%; transition: 0.1s; }
-        .en-fill-ai { height: 100%; background: linear-gradient(to bottom, #ffa502, #ff7f50); width: 0%; transition: 0.1s; }
+        .en-fill { height: 100%; background: linear-gradient(to bottom, #1e90ff, #70a1ff); width: 0%; }
+        .en-fill-ai { height: 100%; background: linear-gradient(to bottom, #ffa502, #ff7f50); width: 0%; }
         canvas { background: #fff; width: 95%; max-width: 800px; height: auto; border: 4px solid #333; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         .controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-between; padding: 0 25px; box-sizing: border-box; pointer-events: none; }
         .ctrl-group { display: flex; gap: 12px; pointer-events: none; }
-        .btn { width: 65px; height: 65px; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; pointer-events: auto; color: white; transition: 0.1s; }
+        .btn { width: 65px; height: 65px; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; pointer-events: auto; color: white; }
         .btn:active { background: rgba(255, 255, 255, 0.4); transform: scale(0.9); }
         .btn-k { border-color: gold; color: gold; background: rgba(255, 215, 0, 0.1); }
+        
+        /* Combo 樣式優化 */
+        #combo-wrap { position: absolute; top: 110px; left: 50px; text-align: left; pointer-events: none; display: none; transform: skewX(-10deg); }
+        #combo-count { font-size: 60px; color: #ff0; text-shadow: 4px 4px 0 #f00, 6px 6px 0 #000; display: block; line-height: 1; transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        #combo-text { font-size: 20px; color: white; font-weight: bold; text-shadow: 2px 2px 0 #000; }
     </style>
 </head>
 <body>
 
 <div class="header"><div id="stage-display" class="stage-info">STICKMAN SOUL</div></div>
 <div id="game-container">
+    <div id="combo-wrap">
+        <span id="combo-count">0</span>
+        <span id="combo-text">COMBO HITS</span>
+    </div>
     <div class="ui-bars">
         <div class="bar-wrap">
             <span class="bar-label">PLAYER</span>
@@ -62,6 +71,8 @@ const ctx = canvas.getContext('2d');
 let gameState = 'START_MENU';
 let currentStage = 1;
 let hitFlash = 0;
+let screenShake = 0; 
+let comboCount = 0;
 const keys = { left: false, right: false };
 
 class Stickman {
@@ -71,9 +82,10 @@ class Stickman {
         this.dx = 0; this.dy = 0;
         this.isJumping = false; 
         this.isUltra = false;
-        this.isAttacking = false; // 攻擊中
+        this.isAttacking = false;
         this.isBlocking = false;
-        this.lastAttackTime = 0; // 上次攻擊時間
+        this.stunFrames = 0;
+        this.lastAttackTime = 0;
         this.direction = isPlayer ? 1 : -1;
         this.size = 1;
     }
@@ -82,54 +94,60 @@ class Stickman {
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.scale(this.size, this.size);
-        ctx.strokeStyle = this.isUltra ? (Date.now()%100<50?'gold':'white') : (this.hp > 0 ? this.color : '#ccc');
-        ctx.lineWidth = 5;
-        ctx.lineCap = 'round';
+        
+        let drawColor = this.color;
+        if (this.stunFrames > 0) drawColor = "#ff9900";
+        if (this.isUltra) drawColor = (Date.now()%100<50?'gold':'white');
+        if (this.hp <= 0) drawColor = "#ccc";
 
-        // 繪製本體
-        ctx.beginPath(); ctx.arc(0, -40, 10, 0, Math.PI*2); ctx.stroke(); // 頭
-        ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(0, 0); ctx.stroke(); // 身
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-15, 20); ctx.stroke(); // 腳
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(15, 20); ctx.stroke();
-
-        // 動作邏輯繪製
-        ctx.beginPath();
-        if (this.isUltra) {
-            ctx.moveTo(0, -20); ctx.lineTo(50 * this.direction, -20); // 大招姿勢
-            ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
-            ctx.fillRect(10 * this.direction, -75, 450 * this.direction, 110);
-        } else if (this.isAttacking) {
-            ctx.moveTo(0, -25); ctx.lineTo(35 * this.direction, -25); // 出拳姿勢
-        } else if (this.isBlocking) {
-            ctx.moveTo(0, -25); ctx.lineTo(18 * this.direction, -38);
-            ctx.moveTo(0, -15); ctx.lineTo(18 * this.direction, -25);
-            ctx.stroke();
-            ctx.beginPath(); ctx.arc(12 * this.direction, -28, 22, -Math.PI/2, Math.PI/2);
-            ctx.strokeStyle = "rgba(30, 144, 255, 0.5)"; ctx.lineWidth = 2;
+        ctx.strokeStyle = drawColor; ctx.lineWidth = 5; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(this.stunFrames > 0 ? 5 : 0, -40, 10, 0, Math.PI*2); ctx.stroke(); 
+        ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(0, 0); ctx.stroke();
+        
+        if (this.isJumping && this.isAttacking) {
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(25 * this.direction, 15); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(30 * this.direction, 5); ctx.stroke();
         } else {
-            ctx.moveTo(0, -20); ctx.lineTo(15 * this.direction, -12); // 平常姿勢
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-15, 20); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(15, 20); ctx.stroke();
+            ctx.beginPath();
+            if (this.isUltra) {
+                ctx.moveTo(0, -20); ctx.lineTo(50 * this.direction, -20);
+                ctx.fillStyle = 'rgba(255, 215, 0, 0.4)';
+                ctx.fillRect(10 * this.direction, -75, 450 * this.direction, 110);
+            } else if (this.isAttacking) {
+                ctx.moveTo(0, -25); ctx.lineTo(40 * this.direction, -25);
+            } else if (this.isBlocking) {
+                ctx.moveTo(0, -25); ctx.lineTo(18 * this.direction, -38);
+                ctx.moveTo(0, -15); ctx.lineTo(18 * this.direction, -25);
+                ctx.stroke();
+                ctx.beginPath(); ctx.arc(12 * this.direction, -28, 22, -Math.PI/2, Math.PI/2);
+                ctx.strokeStyle = "rgba(30, 144, 255, 0.5)"; ctx.lineWidth = 2;
+            } else {
+                ctx.moveTo(0, -20); ctx.lineTo(15 * this.direction, -12);
+            }
+            ctx.stroke();
         }
-        ctx.stroke(); ctx.restore();
+        ctx.restore();
     }
 
     update(target) {
-        if (this.color === 'black') {
-            const movingAway = (target.x > this.x && keys.left) || (target.x < this.x && keys.right);
-            // 攻擊或大招期間不能移動
-            if (this.isAttacking || this.isUltra) {
-                this.dx = 0;
-                this.isBlocking = false;
-            } else if (movingAway && !this.isJumping) {
-                this.isBlocking = true;
-                this.dx = keys.left ? -2.5 : 2.5;
-            } else {
-                this.isBlocking = false;
-                if (keys.left) { this.dx = -5.5; this.direction = -1; }
-                else if (keys.right) { this.dx = 5.5; this.direction = 1; }
-                else { this.dx = 0; }
+        if (this.stunFrames > 0) { 
+            this.stunFrames--; 
+            this.dx *= 0.8; 
+            // 關鍵修改：當玩家受到僵直(被擊中)時，連擊重置
+            if (this.color === 'black') {
+                comboCount = 0;
+                document.getElementById('combo-wrap').style.display = 'none';
             }
+        } 
+        else if (this.color === 'black') {
+            const movingAway = (target.x > this.x && keys.left) || (target.x < this.x && keys.right);
+            if (this.isAttacking || this.isUltra) { this.dx *= 0.7; } 
+            else if (movingAway && !this.isJumping) { this.isBlocking = true; this.dx = keys.left ? -2.5 : 2.5; } 
+            else { this.isBlocking = false; if (keys.left) { this.dx = -5.5; this.direction = -1; } else if (keys.right) { this.dx = 5.5; this.direction = 1; } else { this.dx = 0; } }
         }
-        this.dy += 0.9; this.y += this.dy; this.x += this.dx;
+        this.dx *= 0.9; this.dy += 0.9; this.y += this.dy; this.x += this.dx;
         if (this.y > 300) { this.y = 300; this.dy = 0; this.isJumping = false; }
         this.x = Math.max(30, Math.min(770, this.x));
     }
@@ -139,38 +157,60 @@ const p1 = new Stickman(150, 'black', true);
 const ai = new Stickman(650, 'red', false);
 
 function attack(attacker, target, isUltra) {
-    if (gameState !== 'PLAYING') return;
+    if (gameState !== 'PLAYING' || attacker.stunFrames > 0) return;
     const now = Date.now();
-    
-    // 普通攻擊 0.5 秒冷卻
     if (!isUltra && now - attacker.lastAttackTime < 500) return;
     
     attacker.lastAttackTime = now;
-    let range = isUltra ? 450 : 85;
-    let dmg = isUltra ? 45 : 12;
+    let isAirAttack = attacker.isJumping && !isUltra;
+    let range = isUltra ? 450 : (isAirAttack ? 100 : 85);
+    let dmg = isUltra ? 50 : (isAirAttack ? 18 : 12);
 
     if (isUltra) {
         attacker.isUltra = true;
+        screenShake = 18; 
         setTimeout(() => attacker.isUltra = false, 600);
     } else {
         attacker.isAttacking = true;
-        setTimeout(() => attacker.isAttacking = false, 200); // 動作持續 0.2 秒
+        setTimeout(() => attacker.isAttacking = false, 250);
     }
 
     const dist = Math.abs(attacker.x - target.x);
     const correctDir = (attacker.direction === 1 && target.x > attacker.x) || (attacker.direction === -1 && target.x < attacker.x);
 
     if (dist < range * attacker.size && correctDir) {
-        if (target.isBlocking && !isUltra) {
+        if (target.isBlocking && !isUltra && !isAirAttack) {
             target.hp -= dmg * 0.2;
+            target.dx = attacker.direction * 3;
         } else {
-            target.hp -= dmg;
-            // 降低 AI 的能量獲取速度 (15 -> 8)
-            let enGain = attacker === p1 ? 15 : 8;
-            attacker.energy = Math.min(100, attacker.energy + enGain);
-            hitFlash = 6;
+            let finalDmg = (target.isBlocking && isAirAttack) ? dmg * 0.6 : dmg;
+            target.hp -= finalDmg;
+            target.stunFrames = isUltra ? 40 : (isAirAttack ? 25 : 15);
+            
+            attacker.energy = Math.min(100, attacker.energy + (attacker === p1 ? 16 : 8));
+            hitFlash = 8;
+            screenShake = isUltra ? 30 : (isAirAttack ? 15 : 8); 
+            target.dx = attacker.direction * (isUltra ? 50 : (isAirAttack ? 18 : 6)); 
+            target.dy = isUltra ? -12 : (isAirAttack ? -5 : -1); 
+
+            // 無限連擊邏輯：只要玩家命中，數字就增加，不設計時器
+            if (attacker === p1) {
+                comboCount++;
+                showCombo();
+            }
         }
     }
+}
+
+function showCombo() {
+    if (comboCount < 2) return; // 2連擊以上才顯示
+    const el = document.getElementById('combo-wrap');
+    const count = document.getElementById('combo-count');
+    el.style.display = 'block';
+    count.innerText = comboCount;
+    // 每次命中時數字縮放效果
+    count.style.transform = "scale(1.4)";
+    setTimeout(() => { count.style.transform = "scale(1)"; }, 100);
 }
 
 function setupControls() {
@@ -183,27 +223,27 @@ function setupControls() {
     };
     bind('btn-left', () => { keys.left = true; }, () => keys.left = false);
     bind('btn-right', () => { keys.right = true; }, () => keys.right = false);
-    bind('btn-up', () => { if(!p1.isJumping && !p1.isAttacking){ p1.dy = -17; p1.isJumping = true; } }, () => {});
-    bind('btn-j', () => { if(!p1.isBlocking) attack(p1, ai, false); }, () => {});
-    bind('btn-k', () => { if(p1.energy >= 100 && !p1.isBlocking){ p1.energy = 0; attack(p1, ai, true); } }, () => {});
+    bind('btn-up', () => { if(!p1.isJumping && p1.stunFrames <= 0){ p1.dy = -17; p1.isJumping = true; } }, () => {});
+    bind('btn-j', () => { attack(p1, ai, false); }, () => {});
+    bind('btn-k', () => { if(p1.energy >= 100) { p1.energy = 0; attack(p1, ai, true); } }, () => {});
 
     window.addEventListener('keydown', (e) => {
         if (gameState === 'START_MENU') { startGame(); return; }
         if (e.key === 'ArrowLeft') keys.left = true;
         if (e.key === 'ArrowRight') keys.right = true;
-        if (e.key === 'ArrowUp' && !p1.isJumping && !p1.isAttacking) { p1.dy = -17; p1.isJumping = true; }
-        if (e.key === 'j' || e.key === 'J') { if(!p1.isBlocking) attack(p1, ai, false); }
-        if (e.key === 'k' || e.key === 'K') { if(p1.energy >= 100 && !p1.isBlocking){ p1.energy = 0; attack(p1, ai, true); } }
+        if (e.key === 'ArrowUp' && !p1.isJumping && p1.stunFrames <= 0) { p1.dy = -17; p1.isJumping = true; }
+        if (e.key === 'j' || e.key === 'J') attack(p1, ai, false);
+        if (e.key === 'k' || e.key === 'K') { if(p1.energy >= 100) { p1.energy = 0; attack(p1, ai, true); } }
     });
-    window.addEventListener('keyup', (e) => {
-        if (e.key === 'ArrowLeft') keys.left = false;
-        if (e.key === 'ArrowRight') keys.right = false;
-    });
+    window.addEventListener('keyup', (e) => { if (e.key === 'ArrowLeft') keys.left = false; if (e.key === 'ArrowRight') keys.right = false; });
 }
 
 function startGame() { currentStage = 1; initStage(1); }
 function initStage(stage) {
-    p1.hp = 100; p1.x = 150; p1.energy = 0; ai.x = 650; ai.energy = 0;
+    p1.hp = 100; p1.x = 150; p1.energy = 0; p1.stunFrames = 0;
+    ai.x = 650; ai.energy = 0; ai.stunFrames = 0;
+    comboCount = 0;
+    document.getElementById('combo-wrap').style.display = 'none';
     gameState = 'PLAYING';
     if (stage <= 4) {
         document.getElementById('stage-display').innerText = `STAGE ${stage}`;
@@ -214,58 +254,43 @@ function initStage(stage) {
     }
 }
 
-function drawMenu() {
-    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#222"; ctx.font = "bold 36px Arial"; ctx.textAlign = "center";
-    ctx.fillText("火柴人：格鬥之魂 - 重裝版", 400, 110);
-    ctx.font = "18px Arial"; ctx.fillStyle = "#ff4757";
-    ctx.fillText("新機制：普通攻擊(J)有 0.5秒 冷卻時間，不可亂按！", 400, 160);
-    ctx.textAlign = "left"; ctx.fillStyle = "#555";
-    ctx.fillText("• 攻擊動作：攻擊時會伸出手臂，此時無法移動", 250, 210);
-    ctx.fillText("• AI 平衡：降低了敵人集氣速度，更公平的戰鬥", 250, 245);
-    ctx.fillText("• 防禦：後退即可抵擋傷害", 250, 280);
-    ctx.textAlign = "center";
-    ctx.fillStyle = (Date.now() % 1000 < 500) ? "#000" : "#aaa";
-    ctx.fillText("點擊畫面開始遊戲", 400, 360);
-}
-
 function loop() {
-    if (gameState === 'START_MENU') drawMenu();
-    else {
-        ctx.fillStyle = hitFlash > 0 ? '#eee' : '#fff'; if (hitFlash > 0) hitFlash--;
+    if (gameState === 'START_MENU') {
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 800, 400);
+        ctx.fillStyle = "#222"; ctx.font = "bold 32px Arial"; ctx.textAlign = "center";
+        ctx.fillText("火柴人：格鬥之魂 - 無限連擊版", 400, 150);
+        ctx.font = "18px Arial"; 
+        ctx.fillText("連擊直到你被打中為止！", 400, 200);
+        ctx.fillText("點擊螢幕開始", 400, 300);
+    } else {
+        ctx.save();
+        if (screenShake > 0) { ctx.translate((Math.random()-0.5)*screenShake, (Math.random()-0.5)*screenShake); screenShake *= 0.82; }
+        ctx.fillStyle = hitFlash > 0 ? '#ffdddd' : '#fff'; if (hitFlash > 0) hitFlash--;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.strokeStyle = '#ddd'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 320); ctx.lineTo(800, 320); ctx.stroke();
-
+        
         if (gameState === 'PLAYING') {
             p1.update(ai);
-            let dist = p1.x - ai.x;
-            ai.direction = dist > 0 ? 1 : -1;
+            let dist = p1.x - ai.x; ai.direction = dist > 0 ? 1 : -1;
             let aiSpeed = 1.9 + (currentStage * 0.4);
-            if (!ai.isAttacking && !ai.isUltra) {
-                if (Math.abs(dist) > 65 * ai.size) ai.dx = dist > 0 ? aiSpeed : -aiSpeed; else ai.dx = 0;
-            } else { ai.dx = 0; }
-            
-            // AI 攻擊 (同樣受冷卻限制)
-            if (Math.abs(dist) < 90 * ai.size && Math.random() < (0.02 + currentStage * 0.005)) attack(ai, p1, false);
+            if (ai.stunFrames <= 0 && !ai.isAttacking && !ai.isUltra) { if (Math.abs(dist) > 65 * ai.size) ai.dx += (dist > 0 ? aiSpeed : -aiSpeed) * 0.1; }
+            if (Math.abs(dist) < 95 * ai.size && Math.random() < (0.02 + currentStage * 0.005)) attack(ai, p1, false);
             if (ai.energy >= 100) { ai.energy = 0; attack(ai, p1, true); }
             ai.update(p1);
 
-            if (p1.hp <= 0) gameState = 'GAMEOVER';
-            if (ai.hp <= 0) {
-                if (currentStage < 5) { currentStage++; initStage(currentStage); }
-                else { gameState = 'WIN'; }
-            }
+            if (p1.hp <= 0) { gameState = 'GAMEOVER'; comboCount = 0; document.getElementById('combo-wrap').style.display = 'none'; }
+            if (ai.hp <= 0) { if (currentStage < 5) { currentStage++; initStage(currentStage); } else { gameState = 'WIN'; } }
         }
         p1.draw(); ai.draw();
-        document.getElementById('p1-hp').style.width = Math.max(0, p1.hp) + '%';
-        document.getElementById('p2-hp').style.width = (Math.max(0, ai.hp) / ai.maxHp * 100) + '%';
+        ctx.restore();
+        document.getElementById('p1-hp').style.width = p1.hp + '%';
+        document.getElementById('p2-hp').style.width = (ai.hp / ai.maxHp * 100) + '%';
         document.getElementById('p1-en').style.width = p1.energy + '%';
         document.getElementById('p2-en').style.width = ai.energy + '%';
-
         if (gameState !== 'PLAYING') {
             ctx.fillStyle = "rgba(0,0,0,0.85)"; ctx.fillRect(0, 0, 800, 400);
             ctx.fillStyle = "white"; ctx.font = "40px Arial"; ctx.textAlign = "center";
-            ctx.fillText(gameState === 'WIN' ? "傳奇誕生！" : "再接再厲", 400, 200);
+            ctx.fillText(gameState === 'WIN' ? "KO! 戰場統治者" : "再戰一次吧", 400, 200);
         }
     }
     requestAnimationFrame(loop);
