@@ -1,0 +1,155 @@
+\<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>火柴人：行動對決</title>
+    <style>
+        body { text-align: center; font-family: sans-serif; background: #1a1a1a; color: white; margin: 0; overflow: hidden; touch-action: none; }
+        #game-container { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        canvas { background: #fff; max-width: 100%; max-height: 70vh; border-bottom: 5px solid #444; }
+        
+        /* UI 能量條 */
+        .ui-bars { width: 90%; display: flex; justify-content: space-between; padding: 10px; }
+        .bar-wrap { width: 45%; }
+        .bar-bg { background: #444; height: 10px; border: 1px solid #000; margin: 2px 0; }
+        .hp-bar { height: 100%; background: #ff4757; width: 100%; transition: 0.2s; }
+        .en-bar { height: 100%; background: #1e90ff; width: 0%; transition: 0.1s; }
+
+        /* 手機控制按鈕 */
+        .controls { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; box-sizing: border-box; pointer-events: none; }
+        .btn { width: 70px; height: 70px; background: rgba(255, 255, 255, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; pointer-events: auto; user-select: none; -webkit-tap-highlight-color: transparent; }
+        .btn:active { background: rgba(255, 255, 255, 0.5); }
+        .left-controls { display: flex; gap: 10px; }
+        .right-controls { display: flex; gap: 10px; }
+        .btn-k { background: rgba(255, 215, 0, 0.3); color: gold; border: 2px solid gold; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div class="ui-bars">
+        <div class="bar-wrap">P1 HP<div class="bar-bg"><div id="p1-hp" class="hp-bar"></div></div>EN<div class="bar-bg"><div id="p1-en" class="en-bar"></div></div></div>
+        <div class="bar-wrap">AI HP<div class="bar-bg"><div id="p2-hp" class="hp-bar"></div></div>EN<div class="bar-bg"><div id="p2-en" class="en-bar" style="background:orange;"></div></div></div>
+    </div>
+
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+    <div class="controls">
+        <div class="left-controls">
+            <div class="btn" id="btn-left">←</div>
+            <div class="btn" id="btn-up">↑</div>
+            <div class="btn" id="btn-right">→</div>
+        </div>
+        <div class="right-controls">
+            <div class="btn" id="btn-j">J</div>
+            <div class="btn btn-k" id="btn-k">K</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// --- 此處省略部分重複的 Stickman 類別與渲染邏輯，直接整合觸控 ---
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playSound(freq, type, duration, vol = 0.05) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+    osc.start(); osc.stop(audioCtx.currentTime + duration);
+}
+
+class Stickman {
+    constructor(x, color, isPlayer) {
+        this.x = x; this.y = 300; this.color = color;
+        this.hp = 100; this.energy = 0;
+        this.dx = 0; this.dy = 0;
+        this.isJumping = false; this.isUltra = false;
+        this.comboStep = 0; this.direction = isPlayer ? 1 : -1;
+    }
+    update() {
+        this.dy += 0.8; this.x += this.dx; this.y += this.dy;
+        if (this.y > 300) { this.y = 300; this.dy = 0; this.isJumping = false; }
+        this.x = Math.max(20, Math.min(780, this.x));
+    }
+    draw() {
+        ctx.save(); ctx.translate(this.x, this.y);
+        ctx.strokeStyle = this.isUltra ? 'gold' : (this.hp > 0 ? this.color : '#ccc');
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(0, -40, 10, 0, Math.PI*2); ctx.stroke(); //頭
+        ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(0, 0); ctx.stroke(); //身
+        if (this.isUltra) {
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+            ctx.fillRect(10*this.direction, -70, 400*this.direction, 100);
+        }
+        ctx.restore();
+    }
+}
+
+const p1 = new Stickman(150, 'black', true);
+const ai = new Stickman(650, 'red', false);
+
+function attack(attacker, target, type) {
+    if (attacker.hp <= 0) return;
+    let damage = (type === 'ultra') ? 30 : 7;
+    let range = (type === 'ultra') ? 400 : 60;
+    if (type === 'ultra') { attacker.isUltra = true; setTimeout(() => attacker.isUltra = false, 500); playSound(100, 'sawtooth', 0.5); }
+    else { playSound(200, 'square', 0.1); }
+
+    const dist = Math.abs(attacker.x - target.x);
+    if (dist < range && ((attacker.direction === 1 && target.x > attacker.x) || (attacker.direction === -1 && target.x < attacker.x))) {
+        target.hp -= damage;
+        attacker.energy = Math.min(100, attacker.energy + 10);
+        playSound(150, 'sine', 0.05);
+    }
+}
+
+// 觸控按鈕事件
+const handleBtn = (id, start) => {
+    const btn = document.getElementById(id);
+    const trigger = (e) => {
+        e.preventDefault();
+        if (id === 'btn-left') p1.dx = start ? -5 : 0;
+        if (id === 'btn-right') p1.dx = start ? 5 : 0;
+        if (id === 'btn-up' && start && !p1.isJumping) { p1.dy = -15; p1.isJumping = true; }
+        if (id === 'btn-j' && start) attack(p1, ai, 'combo');
+        if (id === 'btn-k' && start && p1.energy >= 100) { p1.energy = 0; attack(p1, ai, 'ultra'); }
+        if (start && (id === 'btn-left')) p1.direction = -1;
+        if (start && (id === 'btn-right')) p1.direction = 1;
+    };
+    btn.addEventListener('touchstart', trigger);
+    btn.addEventListener('touchend', (e) => { e.preventDefault(); if(id==='btn-left' || id==='btn-right') p1.dx = 0; });
+    // 相容滑鼠測試
+    btn.addEventListener('mousedown', trigger);
+    btn.addEventListener('mouseup', () => { if(id==='btn-left' || id==='btn-right') p1.dx = 0; });
+};
+
+['btn-left', 'btn-right', 'btn-up', 'btn-j', 'btn-k'].forEach(id => handleBtn(id, true));
+
+function loop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // AI 簡單邏輯
+    const dist = p1.x - ai.x;
+    ai.direction = dist > 0 ? 1 : -1;
+    if (Math.abs(dist) > 60) ai.dx = dist > 0 ? 2 : -2; else ai.dx = 0;
+    if (Math.abs(dist) < 60 && Math.random() < 0.02) attack(ai, p1, 'combo');
+    if (ai.energy >= 100 && Math.abs(dist) < 300) { ai.energy = 0; attack(ai, p1, 'ultra'); }
+
+    p1.update(); ai.update();
+    p1.draw(); ai.draw();
+    
+    document.getElementById('p1-hp').style.width = p1.hp + '%';
+    document.getElementById('p2-hp').style.width = ai.hp + '%';
+    document.getElementById('p1-en').style.width = p1.energy + '%';
+    document.getElementById('p2-en').style.width = ai.energy + '%';
+    
+    requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
